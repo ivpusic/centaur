@@ -50,6 +50,25 @@
         </div>
       <% end %>
 
+      <div class="grid gap-4 border-b border-ink-700 p-5 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+        <div>
+          <div class="text-sm font-medium text-zinc-100">Public Channels</div>
+          <div class="mt-1 text-xs text-zinc-500">Apply permissions to every non-archived public Slack channel.</div>
+        </div>
+        <label class="flex items-start gap-3">
+          <%= form.check_box :slack_public_channel_upload_enabled, class: checkbox_class %>
+          <span class="text-sm font-medium text-zinc-100">Upload</span>
+        </label>
+        <label class="flex items-start gap-3">
+          <%= form.check_box :slack_public_channel_download_enabled, class: checkbox_class %>
+          <span class="text-sm font-medium text-zinc-100">Download</span>
+        </label>
+        <label class="flex items-start gap-3">
+          <%= form.check_box :slack_public_channel_history_enabled, class: checkbox_class %>
+          <span class="text-sm font-medium text-zinc-100">History</span>
+        </label>
+      </div>
+
       <% if permissions.any? %>
         <div class="overflow-x-auto">
           <table class="console-table">

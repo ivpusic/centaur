@@ -24,6 +24,7 @@ module Api
             principal_id: principal.oid,
             principal: principal_payload(principal),
             capabilities: capabilities_payload(principal),
+            slack_public_channel_permissions: slack_public_channel_permissions_payload(principal),
             slack_channel_permissions: principal.slack_channel_permissions_payload,
             oauth_credentials: oauth_credentials_payload(principal),
             permissions: permissions
@@ -74,6 +75,14 @@ module Api
           sandbox_repo_cache: principal.sandbox_repo_cache,
           sandbox_observability_enabled: principal.sandbox_observability_enabled,
           sandbox_api_server_enabled: principal.sandbox_api_server_enabled
+        }
+      end
+
+      def slack_public_channel_permissions_payload(principal)
+        {
+          upload_enabled: principal.slack_public_channel_upload_enabled,
+          download_enabled: principal.slack_public_channel_download_enabled,
+          history_enabled: principal.slack_public_channel_history_enabled
         }
       end
 

@@ -159,6 +159,19 @@ class ConsoleControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "principal detail page renders public Slack channel permission controls" do
+    principal = principals(:acme_channel)
+    principal.update!(slack_public_channel_upload_enabled: true)
+
+    get console_principal_url(principal.oid)
+    assert_response :ok
+
+    assert_select "div", text: "Public Channels"
+    assert_select "input[name='principal[slack_public_channel_upload_enabled]'][type=checkbox][checked=checked]"
+    assert_select "input[name='principal[slack_public_channel_download_enabled]'][type=checkbox]"
+    assert_select "input[name='principal[slack_public_channel_history_enabled]'][type=checkbox]"
+  end
+
   test "principal detail page renders DM permissions as API-managed rows" do
     principal = principals(:acme_user_bob)
     SlackChannelPermission.create!(

@@ -17,6 +17,11 @@ module Api
           upload_enabled: true,
           history_enabled: true
         )
+        @proxy.principal.update!(
+          slack_public_channel_upload_enabled: true,
+          slack_public_channel_download_enabled: false,
+          slack_public_channel_history_enabled: true
+        )
       end
 
       test "returns redacted sandbox permissions for a valid sandbox token" do
@@ -60,6 +65,14 @@ module Api
         assert_equal @proxy.principal.oid, data.fetch("principal_id")
         assert_equal @proxy.principal.namespace, data.dig("principal", "namespace")
         assert_equal @proxy.principal.sandbox_repo_cache, data.dig("capabilities", "sandbox_repo_cache")
+        assert_equal(
+          {
+            "upload_enabled" => true,
+            "download_enabled" => false,
+            "history_enabled" => true
+          },
+          data.fetch("slack_public_channel_permissions")
+        )
         assert_equal 1, data.fetch("slack_channel_permissions").length
         assert_equal [
           {

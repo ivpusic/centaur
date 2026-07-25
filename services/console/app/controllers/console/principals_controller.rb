@@ -108,6 +108,9 @@ module Console
 
     def slack_channel_permission_params
       params.require(:principal).permit(
+        :slack_public_channel_upload_enabled,
+        :slack_public_channel_download_enabled,
+        :slack_public_channel_history_enabled,
         slack_channel_permissions_attributes: %i[
           id
           channel_id
