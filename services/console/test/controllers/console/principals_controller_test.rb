@@ -105,9 +105,6 @@ module Console
       patch console_principal_slack_channel_permissions_url(principal.oid),
             params: {
               principal: {
-                slack_public_channel_upload_enabled: "1",
-                slack_public_channel_download_enabled: "0",
-                slack_public_channel_history_enabled: "1",
                 slack_channel_permissions_attributes: {
                   "0" => {
                     channel_id: "C0123456789",
@@ -126,10 +123,6 @@ module Console
             }
 
       assert_redirected_to console_principal_path(principal.oid)
-      principal.reload
-      assert_predicate principal, :slack_public_channel_upload_enabled
-      assert_not principal.slack_public_channel_download_enabled
-      assert_predicate principal, :slack_public_channel_history_enabled
       assert_equal(
         [
           {
@@ -147,7 +140,7 @@ module Console
             "history_enabled" => false
           }
         ],
-        principal.slack_channel_permissions_payload
+        principal.reload.slack_channel_permissions_payload
       )
     end
 

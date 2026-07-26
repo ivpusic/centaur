@@ -480,12 +480,6 @@ pub struct Principal {
     pub sandbox_observability_enabled: bool,
     #[serde(default = "default_true")]
     pub sandbox_api_server_enabled: bool,
-    #[serde(default)]
-    pub slack_public_channel_upload_enabled: bool,
-    #[serde(default)]
-    pub slack_public_channel_download_enabled: bool,
-    #[serde(default)]
-    pub slack_public_channel_history_enabled: bool,
 }
 
 /// Request body for creating/updating one Slack permission row on a principal.

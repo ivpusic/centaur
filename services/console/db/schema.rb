@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_25_231120) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_21_213228) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -313,9 +313,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_25_231120) do
     t.boolean "sandbox_api_server_enabled", default: true, null: false
     t.boolean "sandbox_observability_enabled", default: true, null: false
     t.string "sandbox_repo_cache", default: "all", null: false
-    t.boolean "slack_public_channel_download_enabled", default: false, null: false
-    t.boolean "slack_public_channel_history_enabled", default: false, null: false
-    t.boolean "slack_public_channel_upload_enabled", default: false, null: false
     t.bigint "sync_config_cache_version", default: 0, null: false
     t.datetime "updated_at", null: false
     t.index ["created_by_id"], name: "index_principals_on_created_by_id"

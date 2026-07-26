@@ -166,14 +166,6 @@ class PrincipalSyncConfigSnapshotTest < ActiveSupport::TestCase
     assert_equal @principal.sync_config_cache_version, fresh.principal_cache_version
   end
 
-  test "public Slack channel permission changes bump sync config cache version" do
-    original_version = @principal.sync_config_cache_version
-
-    @principal.update!(slack_public_channel_history_enabled: true)
-
-    assert_equal original_version + 1, @principal.reload.sync_config_cache_version
-  end
-
   # The stampede regression: when another session holds the rebuild lock,
   # fetch_for must serve the stale current-version snapshot instead of
   # queuing behind the row lock.

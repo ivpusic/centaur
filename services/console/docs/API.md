@@ -1188,9 +1188,6 @@ A principal is an identity (an application, service, or proxy owner) that can be
 | `foreign_id` | optional    | Unique per namespace. Immutable. |
 | `name`       | optional    | |
 | `labels`     | optional    | |
-| `slack_public_channel_upload_enabled` | optional | Defaults to `false`. Allows Slack proxy uploads to public channels. |
-| `slack_public_channel_download_enabled` | optional | Defaults to `false`. Allows Slack proxy file reads/downloads from public channels. |
-| `slack_public_channel_history_enabled` | optional | Defaults to `false`. Allows Slack proxy history/member/thread reads from public channels. |
 
 ### Operations
 

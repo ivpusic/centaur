@@ -6992,9 +6992,6 @@ mod tests {
             labels,
             sandbox_observability_enabled: true,
             sandbox_api_server_enabled: true,
-            slack_public_channel_upload_enabled: false,
-            slack_public_channel_download_enabled: false,
-            slack_public_channel_history_enabled: false,
         }
     }
 

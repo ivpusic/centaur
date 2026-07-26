@@ -36,16 +36,12 @@ class Principal < ApplicationRecord
   validates :foreign_id, uniqueness: { scope: :namespace, allow_nil: true },
             format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }, allow_nil: true
   validates :sandbox_repo_cache, inclusion: { in: SANDBOX_REPO_CACHE_VALUES }
-  validates :slack_public_channel_upload_enabled, inclusion: { in: [ true, false ] }
-  validates :slack_public_channel_download_enabled, inclusion: { in: [ true, false ] }
-  validates :slack_public_channel_history_enabled, inclusion: { in: [ true, false ] }
 
   # Stand-in for an inline secret value in redacted config: effective_config
   # reports that a control_plane source carries a value without revealing it.
   REDACTED = "[redacted]".freeze
   SLACK_CHANNEL_ID_LABEL = "slack_channel_id".freeze
   SLACK_CHANNEL_ID_FORMAT = /\A[CDG][A-Z0-9]{8,}\z/
-  SLACK_PUBLIC_CHANNEL_SCOPE = "public_channels".freeze
 
   # The config of a principal with no effective grants; also what an unassigned
   # proxy resolves to.
@@ -205,25 +201,6 @@ class Principal < ApplicationRecord
     (slack_upload_channel_ids + slack_download_channel_ids + slack_history_channel_ids).uniq
   end
 
-  def slack_public_channel_upload_scopes
-    slack_public_channel_upload_enabled? ? [ SLACK_PUBLIC_CHANNEL_SCOPE ] : []
-  end
-
-  def slack_public_channel_download_scopes
-    slack_public_channel_download_enabled? ? [ SLACK_PUBLIC_CHANNEL_SCOPE ] : []
-  end
-
-  def slack_public_channel_history_scopes
-    slack_public_channel_history_enabled? ? [ SLACK_PUBLIC_CHANNEL_SCOPE ] : []
-  end
-
-  def slack_jwt_permissions?
-    slack_jwt_channel_ids.any? ||
-      slack_public_channel_upload_enabled? ||
-      slack_public_channel_download_enabled? ||
-      slack_public_channel_history_enabled?
-  end
-
   def self.bump_sync_config_cache_versions(ids)
     ids = Array(ids).compact.uniq
     return if ids.empty?
@@ -315,8 +292,6 @@ class Principal < ApplicationRecord
 
   def api_server_jwt_secret
     return nil unless sandbox_api_server_enabled?
-
-    return nil unless slack_jwt_permissions?
 
     token = ApiServer::Jwt.encode_for_principal(self)
     return nil if token.blank?
@@ -493,10 +468,7 @@ class Principal < ApplicationRecord
   def sync_config_fields_changed?
     previous_changes.key?("name") ||
       previous_changes.key?("labels") ||
-      previous_changes.key?("sandbox_api_server_enabled") ||
-      previous_changes.key?("slack_public_channel_upload_enabled") ||
-      previous_changes.key?("slack_public_channel_download_enabled") ||
-      previous_changes.key?("slack_public_channel_history_enabled")
+      previous_changes.key?("sandbox_api_server_enabled")
   end
 
   def bump_own_sync_config_cache_version

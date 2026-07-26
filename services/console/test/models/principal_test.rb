@@ -179,54 +179,25 @@ class PrincipalTest < ActiveSupport::TestCase
       assert_equal [ "C0123456789" ], claims.dig("slack", "upload_channels")
       assert_equal [ "G9876543210" ], claims.dig("slack", "download_channels")
       assert_equal [ "C0123456789" ], claims.dig("slack", "history_channels")
-      assert_equal [], claims.dig("slack", "upload_scopes")
-      assert_equal [], claims.dig("slack", "download_scopes")
-      assert_equal [], claims.dig("slack", "history_scopes")
       assert_equal 1.hour.to_i, claims.fetch("exp") - claims.fetch("iat")
       assert_equal ApiServer::Jwt.rotation_offset(principal),
                    claims.fetch("iat") % ApiServer::Jwt::DEFAULT_WINDOW_SECONDS
     end
   end
 
-  test "effective_config adds api server JWT from public Slack channel scopes" do
-    with_env(
-      "CENTAUR_JWT_SIGNING_SECRET" => "test-secret",
-      "CENTAUR_API_URL" => "http://api.internal:8080"
-    ) do
-      principal = principals(:acme_channel)
-      principal.update!(
-        slack_public_channel_upload_enabled: true,
-        slack_public_channel_download_enabled: false,
-        slack_public_channel_history_enabled: true
-      )
-
-      config = principal.effective_config(redact_secrets: false)
-      entry = config.fetch("secrets").find do |secret|
-        secret.dig("inject", "header") == "Authorization" &&
-          secret.dig("source", "type") == "control_plane"
-      end
-
-      refute_nil entry
-      claims = jwt_payload(entry.dig("source", "value"))
-      assert_equal [], claims.dig("slack", "upload_channels")
-      assert_equal [], claims.dig("slack", "download_channels")
-      assert_equal [], claims.dig("slack", "history_channels")
-      assert_equal [ Principal::SLACK_PUBLIC_CHANNEL_SCOPE ], claims.dig("slack", "upload_scopes")
-      assert_equal [], claims.dig("slack", "download_scopes")
-      assert_equal [ Principal::SLACK_PUBLIC_CHANNEL_SCOPE ], claims.dig("slack", "history_scopes")
-    end
-  end
-
-  test "effective_config does not fall back to slack channel label" do
+  test "api server JWT does not fall back to slack channel label" do
     with_env("CENTAUR_JWT_SIGNING_SECRET" => "test-secret") do
       principal = principals(:acme_channel)
       principal.update!(labels: { Principal::SLACK_CHANNEL_ID_LABEL => "C0123456789" })
 
-      assert_nil ApiServer::Jwt.encode_for_principal(principal)
+      claims = jwt_payload(ApiServer::Jwt.encode_for_principal(principal))
+      assert_equal [], claims.dig("slack", "upload_channels")
+      assert_equal [], claims.dig("slack", "download_channels")
+      assert_equal [], claims.dig("slack", "history_channels")
     end
   end
 
-  test "clearing slack channel permissions revokes slack access" do
+  test "clearing slack channel permissions leaves public Slack proxy access" do
     with_env("CENTAUR_JWT_SIGNING_SECRET" => "test-secret") do
       principal = Principal.create!(
         default_attrs(
@@ -246,7 +217,10 @@ class PrincipalTest < ActiveSupport::TestCase
       SlackChannelPermission.replace_for_principal!(principal, [])
 
       assert_empty principal.slack_channel_permissions.reload
-      assert_nil ApiServer::Jwt.encode_for_principal(principal)
+      claims = jwt_payload(ApiServer::Jwt.encode_for_principal(principal))
+      assert_equal [], claims.dig("slack", "upload_channels")
+      assert_equal [], claims.dig("slack", "download_channels")
+      assert_equal [], claims.dig("slack", "history_channels")
     end
   end
 

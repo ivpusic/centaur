@@ -53,9 +53,6 @@ module Api
         assert_not data.key?("sandbox_repo_cache_enabled")
         assert_equal true, data["sandbox_observability_enabled"]
         assert_equal true, data["sandbox_api_server_enabled"]
-        assert_equal false, data["slack_public_channel_upload_enabled"]
-        assert_equal false, data["slack_public_channel_download_enabled"]
-        assert_equal false, data["slack_public_channel_history_enabled"]
       end
 
       test "GET returns 404 for an unknown oid" do
@@ -76,9 +73,6 @@ module Api
             namespace: "acme",
             foreign_id: "U-new-id",
             labels: { "kind" => "user", "team" => "platform" },
-            slack_public_channel_upload_enabled: true,
-            slack_public_channel_download_enabled: false,
-            slack_public_channel_history_enabled: true,
             slack_channel_permissions: [
               {
                 channel_id: "C0123456789",
@@ -124,9 +118,6 @@ module Api
         assert_not data.key?("sandbox_repo_cache_enabled")
         assert_equal true, data["sandbox_observability_enabled"]
         assert_equal true, data["sandbox_api_server_enabled"]
-        assert_equal true, data["slack_public_channel_upload_enabled"]
-        assert_equal false, data["slack_public_channel_download_enabled"]
-        assert_equal true, data["slack_public_channel_history_enabled"]
       end
 
       test "POST applies system sandbox defaults when omitted" do
@@ -334,9 +325,6 @@ module Api
         )
         body = {
           data: {
-            slack_public_channel_upload_enabled: false,
-            slack_public_channel_download_enabled: true,
-            slack_public_channel_history_enabled: true,
             slack_channel_permissions: [
               {
                 channel_id: "C0123456789",
@@ -356,11 +344,6 @@ module Api
 
         put api_v1_principal_url(id: principal.oid), params: body.to_json, headers: auth_headers
         assert_response :ok
-        principal.reload
-
-        assert_not principal.slack_public_channel_upload_enabled
-        assert_predicate principal, :slack_public_channel_download_enabled
-        assert_predicate principal, :slack_public_channel_history_enabled
 
         assert_equal(
           [
@@ -379,7 +362,7 @@ module Api
               "history_enabled" => true
             }
           ],
-          principal.slack_channel_permissions_payload
+          principal.reload.slack_channel_permissions_payload
         )
       end
 

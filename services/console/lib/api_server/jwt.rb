@@ -11,11 +11,6 @@ module ApiServer
       upload_channels = principal.slack_upload_channel_ids
       download_channels = principal.slack_download_channel_ids
       history_channels = principal.slack_history_channel_ids
-      upload_scopes = principal.slack_public_channel_upload_scopes
-      download_scopes = principal.slack_public_channel_download_scopes
-      history_scopes = principal.slack_public_channel_history_scopes
-      return nil if upload_channels.empty? && download_channels.empty? && history_channels.empty? &&
-                    upload_scopes.empty? && download_scopes.empty? && history_scopes.empty?
 
       CentaurJwt::WindowedToken.encode(
         subject_oid: principal.oid,
@@ -29,10 +24,7 @@ module ApiServer
           "slack" => {
             "upload_channels" => upload_channels,
             "download_channels" => download_channels,
-            "history_channels" => history_channels,
-            "upload_scopes" => upload_scopes,
-            "download_scopes" => download_scopes,
-            "history_scopes" => history_scopes
+            "history_channels" => history_channels
           }
         }
       )
