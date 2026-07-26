@@ -431,14 +431,6 @@ async fn get_slack_channels(
     let mut channels_by_id: BTreeMap<String, SlackChannelItem> = BTreeMap::new();
     let pool = state.pool()?;
     for channel in slack_sync_public_channels(&pool).await? {
-        if let Err(error) = validate_slack_channel_id(&channel.channel_id) {
-            tracing::warn!(
-                channel_id = channel.channel_id,
-                error = %error,
-                "skipping synced Slack public channel with invalid id"
-            );
-            continue;
-        }
         channels_by_id.insert(
             channel.channel_id.clone(),
             slack_sync_channel_item(&claims, channel),
