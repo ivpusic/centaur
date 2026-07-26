@@ -26,6 +26,7 @@ const DEFAULT_SLACK_API_URL: &str = "https://slack.com/api";
 const DEFAULT_MAX_UPLOAD_BYTES: u64 = 100 * 1024 * 1024;
 const DEFAULT_SLACK_FILES_LIST_LIMIT: u16 = 100;
 const MAX_SLACK_FILES_LIST_LIMIT: u16 = 200;
+const SLACK_PUBLIC_CHANNEL_MAX_AGE_HOURS: i32 = 72;
 const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const HTTP_READ_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -948,9 +949,13 @@ async fn slack_sync_public_channels(pool: &PgPool) -> Result<Vec<SlackSyncChanne
     Ok(sqlx::query_as::<_, SlackSyncChannelRow>(
         "SELECT channel_id, channel_name, is_archived, is_private, is_syncable, topic, purpose, member_count \
          FROM slack_sync_channels \
-         WHERE is_private = false AND is_archived = false AND is_syncable = true \
+         WHERE is_private = false \
+           AND is_archived = false \
+           AND is_syncable = true \
+           AND last_seen_at >= now() - ($1::int * interval '1 hour') \
          ORDER BY lower(channel_name), channel_id",
     )
+    .bind(SLACK_PUBLIC_CHANNEL_MAX_AGE_HOURS)
     .fetch_all(pool)
     .await?)
 }
@@ -962,9 +967,11 @@ async fn slack_sync_channel_allows_public_access(
     let channel = sqlx::query_as::<_, SlackSyncChannelRow>(
         "SELECT channel_id, channel_name, is_archived, is_private, is_syncable, topic, purpose, member_count \
          FROM slack_sync_channels \
-         WHERE channel_id = $1",
+         WHERE channel_id = $1 \
+           AND last_seen_at >= now() - ($2::int * interval '1 hour')",
     )
     .bind(channel_id)
+    .bind(SLACK_PUBLIC_CHANNEL_MAX_AGE_HOURS)
     .fetch_optional(pool)
     .await?;
     Ok(channel
