@@ -257,7 +257,108 @@ describe('slackbotv2', () => {
     expect(logData(logs, 'slackbotv2_stop_command_failed')).toMatchObject({
       trigger: 'agent_session_stopped'
     })
-    expect(await sharedState.get<Record<string, unknown>>(stateKey)).toEqual({ activeExecution: true, lastEventId: 3 })
+    await waitFor(() => slackApi.calls.some(call => call.method === 'chat.postEphemeral'))
+    expect(slackApi.calls.find(call => call.method === 'chat.postEphemeral')?.body).toMatchObject({
+      channel: CHANNEL_ID,
+      thread_ts: '1700000000.000300',
+      user: USER_ID
+    })
+    expect(await sharedState.get<Record<string, unknown>>(stateKey)).toMatchObject({
+      activeExecution: true,
+      lastEventId: 3
+    })
+  })
+
+  it('does not start an execution stopped during its handoff', async () => {
+    const sharedState = createMemoryState()
+    await sharedState.connect()
+    let appendStarted = false
+    let releaseAppend = () => {}
+    const appendHeld = new Promise<void>(resolve => { releaseAppend = resolve })
+    let interruptCount = 0
+    bot = createTestBot({
+      state: sharedState,
+      fetch: async (input, init) => {
+        const url = String(input)
+        if (url.endsWith('/interrupt')) {
+          interruptCount += 1
+          return Response.json({ ok: true, interrupted: false, thread_key: 'unused' })
+        }
+        if (url.endsWith('/messages') && init?.method === 'POST') {
+          appendStarted = true
+          await appendHeld
+        }
+        return globalThis.fetch(input, init)
+      }
+    })
+    const parent = await postUserMessage('Context before a stopped run.')
+    const text = `<@${BOT_USER_ID}> start, then get stopped`
+    const mention = await postUserMessage(text, parent.ts)
+    const mentionDelivery = deliverEvent({
+      type: 'app_mention', user: USER_ID, channel: CHANNEL_ID, team: TEAM_ID,
+      ts: mention.ts, thread_ts: parent.ts, text
+    })
+    await waitFor(() => appendStarted)
+
+    const stop = await deliverEvent({
+      type: 'agent_session_stopped', channel: CHANNEL_ID, thread_ts: parent.ts,
+      streaming_message_ts: [], user: USER_ID
+    })
+    expect(stop.response.status).toBe(200)
+    await stop.finished()
+    await waitFor(() => interruptCount === 1)
+    releaseAppend()
+    const delivery = await mentionDelivery
+    expect(delivery.response.status).toBe(200)
+    await delivery.finished()
+
+    expect(codexApi.appends).toHaveLength(1)
+    expect(codexApi.executes).toHaveLength(0)
+    expect(await sharedState.get<Record<string, unknown>>(`thread-state:${threadKey(parent.ts)}`))
+      .toMatchObject({ activeExecution: false })
+  })
+
+  it('interrupts an execution stopped while execute is in flight', async () => {
+    const interrupts: unknown[] = []
+    bot = createTestBot({
+      fetch: async (input, init) => {
+        if (String(input).endsWith('/interrupt')) {
+          // Nothing is active until the held execute returns.
+          interrupts.push(JSON.parse(String(init?.body)))
+          return Response.json({
+            ok: true,
+            interrupted: interrupts.length > 1,
+            thread_key: 'unused'
+          })
+        }
+        return globalThis.fetch(input, init)
+      }
+    })
+    const releaseExecute = codexApi.holdNextExecute()
+    const parent = await postUserMessage('Context before a stopped run.')
+    const text = `<@${BOT_USER_ID}> start, then get stopped`
+    const mention = await postUserMessage(text, parent.ts)
+    const mentionDelivery = deliverEvent({
+      type: 'app_mention', user: USER_ID, channel: CHANNEL_ID, team: TEAM_ID,
+      ts: mention.ts, thread_ts: parent.ts, text
+    })
+    await waitFor(() => codexApi.executes.length === 1)
+
+    const stop = await deliverEvent({
+      type: 'agent_session_stopped', channel: CHANNEL_ID, thread_ts: parent.ts,
+      streaming_message_ts: [], user: USER_ID
+    })
+    await stop.finished()
+    await waitFor(() => interrupts.length === 1)
+    releaseExecute()
+    const delivery = await mentionDelivery
+    await waitFor(() => interrupts.length === 2)
+    await delivery.finished()
+
+    expect(interrupts).toEqual([
+      { reason: `Interrupted from Slack by ${USER_ID}` },
+      { reason: 'Interrupted from Slack' }
+    ])
   })
 
   it('accepts Slack events on the legacy route', async () => {
@@ -5268,6 +5369,7 @@ type StreamCall = {
     | 'agents.sessions.rename'
     | 'assistant.threads.setStatus'
     | 'assistant.threads.setTitle'
+    | 'chat.postEphemeral'
     | 'chat.postMessage'
     | 'chat.update'
     | 'chat.startStream'
@@ -5485,6 +5587,11 @@ async function handlePatchedSlackRequest(
   }
 
   const path = normalizeApiPath(url.pathname)
+  if (path === '/api/chat.postEphemeral') {
+    input.calls.push({ method: 'chat.postEphemeral', body: await requestBody(request) })
+    await sendWebResponse(res, Response.json({ ok: true, message_ts: '1700000000.999999' }))
+    return
+  }
   if (path === '/api/agents.sessions.setStatus' || path === '/api/agents.sessions.rename') {
     const body = await requestBody(request)
     input.calls.push({ method: path.slice('/api/'.length) as StreamCall['method'], body })
