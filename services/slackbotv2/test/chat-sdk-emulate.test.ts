@@ -174,6 +174,92 @@ describe('slackbotv2', () => {
     expect(slackApi.calls.some(call => call.method === 'agents.sessions.rename')).toBe(true)
   })
 
+  it('interrupts the active execution when Slack sends agent_session_stopped', async () => {
+    const threadTs = '1700000000.000100'
+    const key = threadKey(threadTs)
+    const interrupts: Array<{ body: unknown; url: string }> = []
+    const sharedState = createMemoryState()
+    await sharedState.connect()
+    bot = createTestBot({
+      agentViewEnabled: true,
+      state: sharedState,
+      fetch: async (input, init) => {
+        if (String(input).endsWith('/interrupt')) {
+          interrupts.push({ body: JSON.parse(String(init?.body)), url: String(input) })
+          return Response.json({
+            ok: true,
+            interrupted: true,
+            execution_id: 'exe-stopped',
+            thread_key: key
+          })
+        }
+        return globalThis.fetch(input, init)
+      }
+    })
+    const stateKey = `thread-state:${key}`
+    await sharedState.set(stateKey, { activeExecution: true, lastEventId: 7 })
+
+    const delivery = await deliverEvent({
+      type: 'agent_session_stopped',
+      channel: CHANNEL_ID,
+      thread_ts: threadTs,
+      streaming_message_ts: ['1700000000.000200'],
+      user: USER_ID
+    })
+
+    expect(delivery.response.status).toBe(200)
+    await delivery.finished()
+    // finished() does not cover the stop handler: the adapter registers it
+    // through a second waitUntil after resetting the session status.
+    await waitFor(async () =>
+      (await sharedState.get<Record<string, unknown>>(stateKey))?.activeExecution === false
+    )
+    expect(interrupts).toEqual([{
+      body: { reason: `Interrupted from Slack by ${USER_ID}` },
+      url: `${codexApi.url}/api/session/${encodeURIComponent(key)}/interrupt`
+    }])
+    expect(await sharedState.get<Record<string, unknown>>(stateKey)).toMatchObject({
+      activeExecution: false,
+      lastEventId: 7,
+      renderObligation: null
+    })
+  })
+
+  it('logs a failed native stop without failing the webhook', async () => {
+    const logs: CapturedLog[] = []
+    const sharedState = createMemoryState()
+    await sharedState.connect()
+    bot = createTestBot({
+      agentViewEnabled: true,
+      logger: captureLogger(logs),
+      state: sharedState,
+      fetch: async (input, init) => {
+        if (String(input).endsWith('/interrupt')) {
+          return new Response('unavailable', { status: 503, statusText: 'Service Unavailable' })
+        }
+        return globalThis.fetch(input, init)
+      }
+    })
+    const stateKey = `thread-state:${threadKey('1700000000.000300')}`
+    await sharedState.set(stateKey, { activeExecution: true, lastEventId: 3 })
+
+    const delivery = await deliverEvent({
+      type: 'agent_session_stopped',
+      channel: CHANNEL_ID,
+      thread_ts: '1700000000.000300',
+      streaming_message_ts: [],
+      user: USER_ID
+    })
+
+    expect(delivery.response.status).toBe(200)
+    await delivery.finished()
+    await waitFor(() => hasLog(logs, 'slackbotv2_stop_command_failed'))
+    expect(logData(logs, 'slackbotv2_stop_command_failed')).toMatchObject({
+      trigger: 'agent_session_stopped'
+    })
+    expect(await sharedState.get<Record<string, unknown>>(stateKey)).toEqual({ activeExecution: true, lastEventId: 3 })
+  })
+
   it('accepts Slack events on the legacy route', async () => {
     const parent = await postUserMessage('Legacy route context.')
     const mention = await postUserMessage(`<@${BOT_USER_ID}> use the legacy route`, parent.ts)

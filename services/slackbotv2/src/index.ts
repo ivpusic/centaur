@@ -520,6 +520,21 @@ export function createSlackbotV2(options: SlackbotV2Options): SlackbotV2 {
     })
   })
 
+  // Slack's native Stop button. The adapter only aborts its local turn and
+  // resets the Slack session status; the execution itself runs in api-rs.
+  chat.onAgentSessionStopped(async event => {
+    const thread = chat.thread(event.threadId)
+    await interruptThreadExecution(thread, options, {
+      includeContext: false,
+      messageId: event.threadTs,
+      mode: 'append',
+      openStream: false,
+      slackUserId: stringValue(event.userId),
+      startedAtMs: nowMs(),
+      threadId: thread.id
+    }, 'agent_session_stopped')
+  })
+
   const app = new Hono()
   app.get('/health', c => healthResponse(c, stateConnectionStatus))
   app.get('/metrics', c =>
@@ -722,10 +737,19 @@ async function handleStopCommand(
   trigger: string
 ): Promise<boolean> {
   if (!isSlackStopCommand(message)) return false
-  const trace = createHandoffTrace(thread, message, 'append')
+  await interruptThreadExecution(thread, options, createHandoffTrace(thread, message, 'append'), trigger)
+  return true
+}
+
+async function interruptThreadExecution(
+  thread: Thread<SlackbotV2ThreadState>,
+  options: SlackbotV2Options,
+  trace: SlackbotV2Trace,
+  trigger: string
+): Promise<void> {
   traceLog(options, 'slackbotv2_stop_command_started', trace, { trigger })
   const latest = (await thread.state) ?? {}
-  const reason = `Interrupted from Slack by ${slackUserIdForMessage(message) ?? 'unknown user'}`
+  const reason = `Interrupted from Slack by ${trace.slackUserId ?? 'unknown user'}`
   try {
     const response = await interruptSessionExecution(options, thread.id, reason)
     await thread.setState({
@@ -739,7 +763,6 @@ async function handleStopCommand(
       interrupted: response.interrupted,
       trigger
     })
-    return true
   } catch (error) {
     traceWarn(options, 'slackbotv2_stop_command_failed', trace, {
       error: errorMessage(error),
